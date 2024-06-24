@@ -26,7 +26,7 @@ func dataType(s string) string {
 	return "unknown"
 }
 
-func Marshal(s string) ([]byte, error) {
+func marshalArray(s string) ([]byte, error) {
 	var serializedStr strings.Builder
 	//set name ahmed \r\n = new line
 	//*3\r\n$3\r\nSET\r\n$4\r\nname\r\n$5\r\nahmed\r\n
@@ -52,6 +52,27 @@ func Marshal(s string) ([]byte, error) {
 	return []byte(serializedStr.String()), nil
 }
 
+func marshalBulkString(s string) ([]byte, error) {
+	//$<length>\r\n<data>\r\n
+	len := len(s)
+	ms := fmt.Sprintf("$%v\r\n%s", len, s)
+	return []byte(ms), nil
+}
+
+func Marshal(s string) ([]byte, error) {
+	arr := strings.Split(s, " ")
+	arrlen := len(arr)
+	switch {
+	case arrlen == 1:
+		//string
+		return marshalBulkString(s)
+	case arrlen > 1:
+		return marshalArray(s)
+	default:
+		return nil, fmt.Errorf("unsupported data type")
+	}
+}
+
 func unmarshalSlice(s string) ([]any, error) {
 	var (
 		mtypes          string //main type
@@ -59,7 +80,7 @@ func unmarshalSlice(s string) ([]any, error) {
 		nextLineCounter int    //use to detemine the line num that have string
 		arr             []any
 	)
-	
+
 	sc := bufio.NewScanner(strings.NewReader(s))
 	for sc.Scan() {
 		l := sc.Text()
@@ -90,12 +111,22 @@ func unmarshalSlice(s string) ([]any, error) {
 	}
 	return arr, nil
 }
+func unmarshalBulkString(s string) (string, error) {
+	//$<length>\r\n<data>\r\n
+	sl := strings.Split(s, newLine)
+	if len(sl) >= 2 {
+		return sl[1], nil
+	}
+	return "", fmt.Errorf("error unmarshal bulk string %v", s)
+}
 
 func Unmarshal(s string) (any, error) {
 	dtype := dataType(s[:1])
 	switch dtype {
 	case "array":
 		return unmarshalSlice(s)
+	case "bstring":
+		return unmarshalBulkString(s)
 	default:
 		return "", fmt.Errorf("unsupported type")
 	}

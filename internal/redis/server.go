@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net"
+	"reflect"
 	"sync"
 	"time"
 )
@@ -98,20 +99,34 @@ func (s *server) HandleClientConn(conn net.Conn) error {
 		}
 
 		slog.Info("handleCommand "+cmd, "key", key, "val", val)
-		if err := s.HandleArrayCommand(cmd, key, val, expireAfter); err != nil {
+		s, err := s.HandleArrayCommand(cmd, key, val, expireAfter)
+		if err != nil {
 			// Send error response
-			if _, err := conn.Write([]byte(fmt.Sprintf("-error handling Command %v%v", cmd, newLine))); err != nil {
+			if _, err := conn.Write([]byte(fmt.Sprintf("-error handling Command %v%v %v", cmd, newLine, err))); err != nil {
 				return err
 			}
 			slog.Info("send back", "resp", "-error handling Command")
 			return err
 		}
 
-		// Send OK response
-		if _, err := conn.Write([]byte("+OK" + newLine)); err != nil {
-			return err
+		if s != "" && cmd == "get" {
+			//get response
+			encodedString, err := Marshal(s)
+			if err != nil {
+				return fmt.Errorf("error marshal the string %v", err)
+			}
+			if _, err := conn.Write(encodedString); err != nil {
+				return err
+			}
+		} else {
+			// Send OK response
+			// set key value
+			if _, err := conn.Write([]byte("+OK" + newLine)); err != nil {
+				return err
+			}
+			slog.Info("send back", "resp", "+OK")
 		}
-		slog.Info("send back", "resp", "+OK")
+
 		return nil
 	default:
 		// Send error response
@@ -122,20 +137,22 @@ func (s *server) HandleClientConn(conn net.Conn) error {
 	}
 }
 
-func (s *server) HandleArrayCommand(cmd, k, v, expireAfter string) error {
+func (s *server) HandleArrayCommand(cmd, k, v, expireAfter string) (string, error) {
 	slog.Info("handle array command", "cmd", cmd, "key", k, "value", v)
 	switch cmd {
 	case "set":
-		return s.set(k, v, expireAfter)
+		return "", s.set(k, v, expireAfter)
 	case "get": //todo
 		s, err := s.get(k)
 		if err != nil {
-			return err
+			return "", err
 		}
-		fmt.Println(s)
-		return err
+		if str, ok := s.(string); ok {
+			return str, nil
+		}
+		return "", fmt.Errorf("marshal error %v type %v", s, reflect.TypeOf(s))
 	default:
-		return fmt.Errorf("unknow cmd")
+		return "", fmt.Errorf("unknow cmd")
 	}
 }
 
@@ -151,7 +168,7 @@ func (s *server) get(k string) (any, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if value, exist := s.Store[k]; exist {
-		return value, nil
+		return value.Value, nil
 	}
 	return "", fmt.Errorf("key not found")
 }

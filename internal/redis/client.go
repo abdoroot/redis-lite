@@ -91,8 +91,17 @@ func (c *client) get(k string, resChn chan Result) {
 		resChn <- Result{Err: err}
 		return
 	}
+	//unmarshal server response
+	s, err := Unmarshal(string(buf))
+	if err != nil {
+		resChn <- Result{Err: err}
+	}
 
-	resChn <- Result{Err: nil, Data: string(buf)}
+	if str, ok := s.(string); ok {
+		resChn <- Result{Err: nil, Data: str}
+	}
+
+	resChn <- Result{Err: fmt.Errorf("unknow server error")}
 }
 
 func (c *client) set(k, v string, resChn chan Result) {

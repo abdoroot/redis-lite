@@ -5,12 +5,28 @@ import (
 )
 
 func TestUMarshal(t *testing.T) {
+	//array
 	resp, err := Unmarshal("*3\r\n$3\r\nSET\r\n$4\r\nname\r\n$5\r\nmohamed\r\n")
 	if err != nil {
 		t.Error(err)
 	}
 	if len(resp.([]any)) != 3 {
 		t.Error("expected slice of any with length = 3")
+	}
+
+	//string
+	expectedString := "hello"
+	resp, err = Unmarshal("$5\r\nhello\r\n")
+	if err != nil {
+		t.Error(err)
+	}
+
+	if s, ok := resp.(string); !ok {
+		t.Errorf("expected string got %v", s)
+	}
+
+	if resp.(string) != expectedString {
+		t.Errorf("expected %s got %s", expectedString, resp.(string))
 	}
 }
 
