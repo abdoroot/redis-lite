@@ -3,6 +3,6 @@ run:build
 build:
 	@go build -o temp/lb ./cmd/main.go
 set:
-	@go run scripts/client_main.go set name mohamed
+	@go run scripts/client_main.go set name "mohamed" EXP 60
 get:
-	@go run scripts/client_main.go get name mohamed	
+	@go run scripts/client_main.go get name	

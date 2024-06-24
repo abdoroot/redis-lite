@@ -8,11 +8,17 @@ import (
 	"time"
 )
 
+type storeValue struct {
+	Value any
+	//Exp   time.Duration //expire after
+	Exp string //expire after
+}
+
 type server struct {
 	Addr string
 
 	mu    sync.Mutex
-	Store map[any]any
+	Store map[any]storeValue
 }
 
 func NewServer(options Options) *server {
@@ -23,7 +29,7 @@ func NewServer(options Options) *server {
 
 	return &server{
 		Addr:  addr,
-		Store: make(map[any]any),
+		Store: make(map[any]storeValue),
 	}
 }
 
@@ -74,13 +80,25 @@ func (s *server) HandleClientConn(conn net.Conn) error {
 
 	switch t := dataType(sm[:1]); t {
 	case "array":
+		var val, expireAfter string
 		cmd := resp.([]any)[0].(string)
-		key, val := resp.([]any)[1].(string), ""
-		if s, ok := resp.([]any); ok && len(s) == 3 {
-			val = resp.([]any)[2].(string)
+		key := resp.([]any)[1].(string)
+
+		if s, ok := resp.([]any); ok {
+			if len(s) > 2 {
+				val = resp.([]any)[2].(string)
+			}
+
+			if len(s) > 4 {
+				expireAfterFlag := resp.([]any)[3].(string)
+				if expireAfterFlag == "EXP" {
+					expireAfter = resp.([]any)[4].(string)
+				}
+			}
 		}
+
 		slog.Info("handleCommand "+cmd, "key", key, "val", val)
-		if err := s.HandleArrayCommand(cmd, key, val); err != nil {
+		if err := s.HandleArrayCommand(cmd, key, val, expireAfter); err != nil {
 			// Send error response
 			if _, err := conn.Write([]byte(fmt.Sprintf("-error handling Command %v%v", cmd, newLine))); err != nil {
 				return err
@@ -104,11 +122,11 @@ func (s *server) HandleClientConn(conn net.Conn) error {
 	}
 }
 
-func (s *server) HandleArrayCommand(cmd, k, v string) error {
+func (s *server) HandleArrayCommand(cmd, k, v, expireAfter string) error {
 	slog.Info("handle array command", "cmd", cmd, "key", k, "value", v)
 	switch cmd {
 	case "set":
-		return s.set(k, v)
+		return s.set(k, v, expireAfter)
 	case "get": //todo
 		s, err := s.get(k)
 		if err != nil {
@@ -121,11 +139,11 @@ func (s *server) HandleArrayCommand(cmd, k, v string) error {
 	}
 }
 
-func (s *server) set(k, v string) error {
+func (s *server) set(k, v, expireAfter string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	s.Store[k] = v
+	s.Store[k] = storeValue{Value: v, Exp: expireAfter}
 	return nil
 }
 

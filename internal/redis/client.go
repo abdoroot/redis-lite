@@ -37,6 +37,10 @@ func (c *client) Dial() (net.Conn, error) {
 
 func (c *client) Set(ctx context.Context, k, v string) (string, error) {
 	resChn := make(chan Result, 1)
+	start := time.Now()
+	defer func() {
+		fmt.Printf("took %v\n", time.Since(start))
+	}()
 	go c.set(k, v, resChn)
 	select {
 	case res := <-resChn:
