@@ -18,9 +18,7 @@ make build
 
 Run Server:
 
-bash
-
-make run
+    make run
 
 Commands:
 
